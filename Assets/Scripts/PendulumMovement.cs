@@ -2,145 +2,128 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
-using TMPro;
 
 public class PendulumMovement : MonoBehaviour
 {
 
+    [Header("Input")]
+    [SerializeField] string fileName;
+
     [Header("Game Objects")]
-    public Transform sphere1;
-    public Transform sphere2;
-    public Transform sphere3;
-    List<Vector3> pos1 = new List<Vector3>();
-    List<Vector3> pos2 = new List<Vector3>();
-    List<Vector3> pos3 = new List<Vector3>();
+    [SerializeField] Transform[] spheres;
+
+    [Header("Stats")]
+    public int time;
+    [Range(1.0f,100.0f)]
+    public int timeScale;
+    public bool isPlaying;
+    
+    
+    [Header("Components")]
+    [SerializeField] UIController uiController;
+
+#region Data
+
+    List<List<Vector3>> pos = new List<List<Vector3>>();
     List<string> times = new List<string>();
 
-    public int k;
-
-    [Header("UI")]
-    public TextMeshProUGUI timeText;
-    public Button PlayButton;
-    public Image PlayImage;
-    public Image PauseImage;
-    public Slider timeSlider;
-    public TMP_InputField timeInput;
-
-    public TimeGraph graph;
-
-    public void setTimeStep(){
-        float f;
-        float.TryParse(timeInput.text.Replace('.',','),out f);
-        if(f != 0 && f < 101)
-            k = (int) (100/f);
-        Debug.Log(k);
-        
-    }
+#endregion
+    
+#region File Input
 
     StreamReader reader;
 
-    void Start()
-    {
-        reader = new StreamReader(@"positions.csv");
-        timeInput.text = ((float) 100/k).ToString();
-        //Debug.Log((float) 1/k);
-        StartCoroutine(readFile());    
-        StartCoroutine(play());    
-    }
-    
     IEnumerator readFile()
     {
         while (reader.Peek() >= 0){
             string[] values = reader.ReadLine().Split(';');
 
-            times.Add(values[0]);
+            times.Add(values[0].Substring(0,Mathf.Min(values[0].Length,5)));
 
-            pos1.Add(
-                new Vector3(
-                    float.Parse(values[1]),
-                    float.Parse(values[2]),
-                    0
-                )
-            );
+            for(int i = 0; i < pos.Count; i++){
+                pos[i].Add(
+                    new Vector3(
+                        float.Parse(values[2*i+1]),
+                        float.Parse(values[2*i+2]),
+                        0
+                    )
+                );
+            }
 
-            pos2.Add(
-                new Vector3(
-                    float.Parse(values[3]),
-                    float.Parse(values[4]),
-                    0
-                )
-            );
-
-            pos3.Add(
-                new Vector3(
-                    float.Parse(values[5]),
-                    float.Parse(values[6]),
-                    0
-                )
-            );
         }   
 
-        timeSlider.minValue = 0;
-        timeSlider.maxValue = times.Count-1;
+        uiController.setSliderRange(0,times.Count-1);
         
         yield return null;
     }
 
-    bool isPlaying;
+#endregion
 
-    int v;
+#region  Game Logic
 
-    public void togglePlay(){
+    void Start()
+    {
+        reader = new StreamReader(fileName);
+        uiController.setTimeInput((float) 100/timeScale); 
+
+        for(int i = 0; i < spheres.Length; i++){
+            pos.Add(new List<Vector3>());
+        }
+
+        StartCoroutine(readFile());    
+        StartCoroutine(play()); 
+        Debug.Log(pos[1][4]);
+    }
+
+
+    public void togglePlay()
+    {
         isPlaying = !isPlaying;
-
-        PlayImage.gameObject.SetActive(!isPlaying);
-        PauseImage.gameObject.SetActive(isPlaying);
+        uiController.setPlay(isPlaying);
     }
 
+    public void setTimeStep(){
+        timeScale = (int) (100/uiController.getTimeScale());
+    }
 
-    public void setPos(){
-        pos = (int) timeSlider.value;
-        
-        timeSlider.value = pos;
+    public void setPos()
+    {
+        time = uiController.getSliderPos();
+        uiController.setSliderPos(time);
 
-        sphere1.position = pos1[pos];
-        sphere2.position = pos2[pos];
-        sphere3.position = pos3[pos];
+        for(int i = 0; i < spheres.Length; i++){
+            spheres[i].position = pos[i][time];
+        }
 
-        timeText.text = times[pos];
-        
+        uiController.setTime(times[time]);
     }
         
-
-    int pos;
 
     IEnumerator play()
     {
         while(true){
             if(isPlaying){
-                if(pos < times.Count){
-                    timeSlider.value = pos;
+                if(time < times.Count){
+                    uiController.setSliderPos(time);
 
-                    sphere1.position = pos1[pos];
-                    sphere2.position = pos2[pos];
-                    sphere3.position = pos3[pos];
-
-                    timeText.text = times[pos];
+                    for(int i = 0; i < spheres.Length; i++){
+                        spheres[i].position = pos[i][time];
+                        uiController.plotPush(i,Mathf.Atan(pos[i][time].y/pos[i][time].x));
+                    }
                     
-                    pos = pos + k;
-
-                    graph.PushData(0,pos2[pos].y);
-                    graph.PushData(1,pos3[pos].y);
+                    uiController.setTime(times[time]);
+                    time += timeScale;       
                 }
+                else
+                    time = 0;
+
                 
             }            
-
-            yield return new WaitForSeconds((float) 0.001/k);
-
+            yield return new WaitForSeconds((float) 0.001/timeScale);
         }   
-
     }
+
+#endregion
 
 }
 
